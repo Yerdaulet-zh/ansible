@@ -1,0 +1,29 @@
+- name: Ensure yum-utils is present (provides needs-restarting)
+  ansible.builtin.dnf:
+    name: yum-utils
+    state: present
+
+- name: Update & Upgrade all packages on RedHat family
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+  register: dnf_upgrade_result
+
+- name: Check if a reboot is required using needs-restarting
+  ansible.builtin.command: needs-restarting -r
+  register: reboot_check
+  failed_when: false
+  changed_when: false
+
+# Note: 'needs-restarting -r' returns an exit code of 1 if a reboot is needed,
+# and 0 if everything is fine and no reboot is necessary.
+
+- name: Reboot the server if needs-restarting flagged it
+  ansible.builtin.reboot:
+    msg: "Rebooting machine by Ansible os_patching role due to kernel/system updates"
+    connect_timeout: 5
+    reboot_timeout: 300
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+    test_command: uptime
+  when: reboot_check.rc == 1

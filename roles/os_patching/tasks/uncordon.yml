@@ -1,0 +1,6 @@
+---
+- name: Uncordon the Kubernetes node
+  ansible.builtin.shell: |
+    kubectl uncordon {{ ansible_hostname }}
+  delegate_to: localhost
+  become: false

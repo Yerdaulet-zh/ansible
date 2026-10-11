@@ -1,0 +1,18 @@
+---
+- name: Cordon the Kubernetes node
+  ansible.builtin.shell: |
+    kubectl cordon {{ ansible_hostname }}
+  delegate_to: localhost
+  become: false
+  ignore_errors: true
+  tags: [patching, k8s_maintenance]
+
+- name: Drain the Kubernetes node
+  ansible.builtin.shell: |
+    kubectl drain {{ ansible_hostname }} \
+      --ignore-daemonsets \
+      --delete-emptydir-data \
+      --force \
+      --timeout=120s
+  delegate_to: localhost
+  become: false

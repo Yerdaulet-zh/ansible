@@ -1,0 +1,16 @@
+---
+- name: Cordon and Drain K3s Node
+  ansible.builtin.include_tasks: cordon-drain.yml
+  when: enable_k8s_drain
+
+- name: Run Debian/Ubuntu patching workflow
+  ansible.builtin.include_tasks: debian.yml
+  when: ansible_facts['os_family'] | lower == 'debian'
+
+- name: Run Red Hat/Rocky patching workflow
+  ansible.builtin.include_tasks: RHEL.yml
+  when: ansible_facts['os_family'] | lower == 'redhat'
+
+- name: Uncordon K3s Node
+  ansible.builtin.include_tasks: uncordon.yml
+  when: enable_k8s_drain

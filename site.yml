@@ -1,0 +1,19 @@
+---
+- name: Patch Control Plane Nodes (Rolling)
+  hosts: control_plane
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  roles:
+    - role: os_patching
+      enable_k8s_drain: false
+      tags: [patching]
+
+- name: Patch Worker Agents
+  hosts: agents
+  become: true
+  serial: 1
+  roles:
+    - role: os_patching
+      enable_k8s_drain: false
+      tags: [patching]

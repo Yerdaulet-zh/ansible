@@ -17,3 +17,13 @@
     - role: os_patching
       enable_k8s_drain: false
       tags: [patching]
+
+- name: Deploy Prerequisites and Infrastructure
+  hosts: cluster_nodes
+  become: true
+  roles:
+    - role: prerequisites
+      extra_tools:
+        - name: jq
+        - name: htop
+      tags: [prerequisites]

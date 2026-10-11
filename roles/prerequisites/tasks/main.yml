@@ -1,0 +1,8 @@
+---
+- name: Ensure base system prerequisites are installed
+  ansible.builtin.package:
+    name: "{{ item.name }}"
+    state: present
+  loop: "{{ required_tools }}"
+  loop_control:
+    label: "{{ item.name }}"

@@ -1,0 +1,12 @@
+---
+# The mandatory baseline tools that always get installed
+base_required_tools:
+  - name: curl
+  - name: ca-certificates
+  - name: tar
+
+# Empty by default, ready to be extended from site.yml
+extra_tools: []
+
+# Combine them automatically
+required_tools: "{{ base_required_tools + extra_tools }}"

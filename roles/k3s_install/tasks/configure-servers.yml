@@ -1,0 +1,56 @@
+---
+- name: Check if K3s binary exists on control plane
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_server_binary
+
+- name: Install K3s Control Plane (Server) via official script
+  ansible.builtin.shell: |
+    curl -sfL https://get.k3s.io | sh -
+  environment:
+    INSTALL_K3S_CHANNEL: "{{ k3s_channel | default('stable') }}"
+    INSTALL_K3S_VERSION: "{{ k3s_version | default(omit) }}"
+  when: not k3s_server_binary.stat.exists
+  args:
+    executable: /bin/bash
+
+- name: Ensure K3s configuration directory exists
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy K3s Server Configuration File
+  ansible.builtin.copy:
+    dest: /etc/rancher/k3s/config.yaml
+    owner: root
+    group: root
+    mode: '0600'
+    content: |
+      write-kubeconfig-mode: "0644"
+      tls-san:
+        - "{{ ansible_default_ipv4.address }}"
+
+- name: Ensure K3s server service is started and enabled
+  ansible.builtin.systemd:
+    name: k3s
+    state: started
+    enabled: true
+
+- name: Wait for K3s node token to be generated
+  ansible.builtin.wait_for:
+    path: /var/lib/rancher/k3s/server/node-token
+    timeout: 30
+
+- name: Read K3s node token from control plane
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_raw
+  run_once: true
+
+- name: Set shared cluster token fact globally
+  ansible.builtin.set_fact:
+    k3s_shared_token: "{{ k3s_token_raw['content'] | b64decode | trim }}"
+  run_once: true

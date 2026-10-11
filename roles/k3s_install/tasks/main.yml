@@ -1,0 +1,8 @@
+---
+- name: Configure and start Control Plane (Server)
+  ansible.builtin.include_tasks: configure-servers.yml
+  when: inventory_hostname in groups['control_plane']
+
+- name: Configure and start Worker Agents
+  ansible.builtin.include_tasks: configure-agents.yml
+  when: inventory_hostname in groups['agents']

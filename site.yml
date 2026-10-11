@@ -4,26 +4,40 @@
   become: true
   serial: 1
   max_fail_percentage: 0
+  tags: [server_patching]
   roles:
     - role: os_patching
       enable_k8s_drain: false
-      tags: [patching]
 
 - name: Patch Worker Agents
   hosts: agents
   become: true
   serial: 1
+  tags: [agent_patching]
   roles:
     - role: os_patching
       enable_k8s_drain: false
-      tags: [patching]
 
 - name: Deploy Prerequisites and Infrastructure
   hosts: cluster_nodes
   become: true
+  tags: [prerequisites]
   roles:
     - role: prerequisites
       extra_tools:
         - name: jq
         - name: htop
-      tags: [prerequisites]
+
+- name: Install and Configure K3s Cluster
+  hosts: cluster_nodes
+  become: true
+  tags: [k3s_install]
+  roles:
+    - role: k3s_install
+
+- name: Teardown and Uninstall K3s Cluster
+  hosts: cluster_nodes
+  become: true
+  tags: [k3s_uninstall]
+  roles:
+    - role: k3s_uninstall

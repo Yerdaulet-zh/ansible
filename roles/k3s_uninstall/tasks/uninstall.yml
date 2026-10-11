@@ -1,0 +1,44 @@
+---
+- name: Check if any K3s uninstaller script exists
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: k3s_uninstallers
+  loop:
+    - /usr/local/bin/k3s-uninstall.sh
+    - /usr/local/bin/k3s-agent-uninstall.sh
+
+- name: Run K3s uninstallation script if available
+  ansible.builtin.shell: "{{ item.item }}"
+  when: item.stat.exists
+  loop: "{{ k3s_uninstallers.results }}"
+  args:
+    executable: /bin/bash
+
+- name: Force remove K3s binary if still present
+  ansible.builtin.file:
+    path: /usr/local/bin/k3s
+    state: absent
+
+- name: Force remove K3s systemd service files if still present
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/k3s.service
+    - /etc/systemd/system/k3s-agent.service
+    - /etc/systemd/system/k3s.service.env
+    - /etc/systemd/system/k3s-agent.service.env
+
+- name: Reload systemd daemon to clear deleted units
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Remove residual K3s configuration directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: absent
+
+- name: Remove residual K3s data directory
+  ansible.builtin.file:
+    path: /var/lib/rancher/k3s
+    state: absent

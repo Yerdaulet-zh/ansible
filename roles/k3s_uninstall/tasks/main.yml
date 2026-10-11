@@ -1,0 +1,8 @@
+---
+- name: Uninstall K3s Control Plane Server
+  ansible.builtin.include_tasks: uninstall.yml
+  when: inventory_hostname in groups['control_plane']
+
+- name: Uninstall K3s Worker Agent
+  ansible.builtin.include_tasks: uninstall.yml
+  when: inventory_hostname in groups['agents']

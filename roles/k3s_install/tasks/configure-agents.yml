@@ -1,0 +1,23 @@
+---
+- name: Check if K3s binary exists on agent
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_agent_binary
+
+- name: Install and configure K3s Worker Agent via official script
+  ansible.builtin.shell: |
+    curl -sfL https://get.k3s.io | sh -
+  environment:
+    INSTALL_K3S_CHANNEL: "{{ k3s_channel | default('stable') }}"
+    INSTALL_K3S_VERSION: "{{ k3s_version | default(omit) }}"
+    K3S_URL: "https://{{ hostvars[groups['control_plane'][0]]['ansible_default_ipv4']['address'] }}:6443"
+    K3S_TOKEN: "{{ hostvars[groups['control_plane'][0]]['k3s_shared_token'] }}"
+  when: not k3s_agent_binary.stat.exists
+  args:
+    executable: /bin/bash
+
+- name: Ensure K3s agent service is started and enabled
+  ansible.builtin.systemd:
+    name: k3s-agent
+    state: started
+    enabled: true

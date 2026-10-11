@@ -1,16 +1,26 @@
 ---
-- name: Cordon and Drain K3s Node
-  ansible.builtin.include_tasks: cordon-drain.yml
-  when: enable_k8s_drain
+- block:
+    # Cordon & Drain (Runs only if K8s drain is enabled)
+    - name: Run K3s Cordon and Drain
+      ansible.builtin.include_tasks: cordon-drain.yml
+      when: enable_k8s_drain
 
-- name: Run Debian/Ubuntu patching workflow
-  ansible.builtin.include_tasks: debian.yml
-  when: ansible_facts['os_family'] | lower == 'debian'
+    # OS Patching (Debian / RHEL workflows with built-in rollback)
+    - name: Run Debian/Ubuntu patching workflow
+      ansible.builtin.include_tasks: debian.yml
+      when: ansible_facts['os_family'] | lower == 'debian'
 
-- name: Run Red Hat/Rocky patching workflow
-  ansible.builtin.include_tasks: RHEL.yml
-  when: ansible_facts['os_family'] | lower == 'redhat'
+    - name: Run Red Hat/Rocky patching workflow
+      ansible.builtin.include_tasks: RHEL.yml
+      when: ansible_facts['os_family'] | lower == 'redhat'
 
-- name: Uncordon K3s Node
-  ansible.builtin.include_tasks: uncordon.yml
-  when: enable_k8s_drain
+  rescue:
+    - name: Handle patching failure notification
+      ansible.builtin.debug:
+        msg: "Patching or update failed on {{ ansible_hostname }}. Initiating safety cleanup."
+
+  always:
+    # Always uncordon the node back into the cluster (Finally)
+    - name: Ensure Node is Uncordoned and Restored
+      ansible.builtin.include_tasks: uncordon.yml
+      when: enable_k8s_drain

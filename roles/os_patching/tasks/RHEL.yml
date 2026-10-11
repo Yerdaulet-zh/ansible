@@ -1,29 +1,49 @@
-- name: Ensure yum-utils is present (provides needs-restarting)
-  ansible.builtin.dnf:
-    name: yum-utils
-    state: present
+---
+- block:
+    - name: Capture installed package versions before upgrade (RHEL)
+      ansible.builtin.shell: rpm -qa --queryformat '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n'
+      register: pre_upgrade_packages
+      changed_when: false
 
-- name: Update & Upgrade all packages on RedHat family
-  ansible.builtin.dnf:
-    name: "*"
-    state: latest
-  register: dnf_upgrade_result
+    - name: Ensure yum-utils is present (provides needs-restarting)
+      ansible.builtin.dnf:
+        name: yum-utils
+        state: present
 
-- name: Check if a reboot is required using needs-restarting
-  ansible.builtin.command: needs-restarting -r
-  register: reboot_check
-  failed_when: false
-  changed_when: false
+    - name: Update & Upgrade all packages on RedHat family
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+      register: dnf_upgrade_result
 
-# Note: 'needs-restarting -r' returns an exit code of 1 if a reboot is needed,
-# and 0 if everything is fine and no reboot is necessary.
+    - name: Check if a reboot is required using needs-restarting
+      ansible.builtin.command: needs-restarting -r
+      register: reboot_check
+      failed_when: false
+      changed_when: false
 
-- name: Reboot the server if needs-restarting flagged it
-  ansible.builtin.reboot:
-    msg: "Rebooting machine by Ansible os_patching role due to kernel/system updates"
-    connect_timeout: 5
-    reboot_timeout: 300
-    pre_reboot_delay: 0
-    post_reboot_delay: 30
-    test_command: uptime
-  when: reboot_check.rc == 1
+    - name: Reboot the server if needs-restarting flagged it
+      ansible.builtin.reboot:
+        msg: "Rebooting machine by Ansible os_patching role due to kernel/system updates"
+        connect_timeout: 5
+        reboot_timeout: 300
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: uptime
+      when: reboot_check.rc == 1
+
+  rescue:
+    - name: Upgrade failed on RHEL! Attempting package version downgrade/rollback...
+      ansible.builtin.debug:
+        msg: "An error occurred during DNF upgrades on {{ ansible_hostname }}. Reverting packages to pre-upgrade snapshot."
+
+    - name: Rollback packages to previous versions on RHEL
+      ansible.builtin.dnf:
+        name: "{{ pre_upgrade_packages.stdout_lines }}"
+        state: present
+        allow_downgrading: true
+      ignore_errors: false
+
+    - name: Fail playbook after RHEL rollback attempt
+      ansible.builtin.fail:
+        msg: "Patching failed on {{ ansible_hostname }}. Rollback sequence executed."

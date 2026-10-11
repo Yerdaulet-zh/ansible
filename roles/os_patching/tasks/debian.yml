@@ -1,20 +1,40 @@
-- name: Upgrade all packages
-  ansible.builtin.apt:
-    update_cache: yes
-    upgrade: safe
-  register: apt_upgrade_result
+---
+- block:
+    - name: Capture installed package versions before upgrade
+      ansible.builtin.shell: dpkg-query -W -f='${Package}=${Version}\n'
+      register: pre_upgrade_packages
+      changed_when: false
 
-- name: Check if a reboot is required on Ubuntu/Debian
-  ansible.builtin.stat:
-    path: /var/run/reboot-required
-  register: reboot_required_file
+    - name: Upgrade all packages safely
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: safe
+      register: apt_upgrade_result
 
-- name: Reboot the server if a kernel update requires it
-  ansible.builtin.reboot:
-    msg: "Rebooting machine by Ansible os_patching role due to kernel updates"
-    connect_timeout: 5
-    reboot_timeout: 300
-    pre_reboot_delay: 0
-    post_reboot_delay: 30
-    test_command: uptime
-  when: reboot_required_file.stat.exists
+    - name: Check if a reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+
+    - name: Reboot server if kernel update requires it
+      ansible.builtin.reboot:
+        msg: "Rebooting machine by Ansible os_patching role due to kernel updates"
+        connect_timeout: 5
+        reboot_timeout: 300
+      when: reboot_required_file.stat.exists
+
+  rescue:
+    - name: Upgrade failed! Attempting package version rollback...
+      ansible.builtin.debug:
+        msg: "An error occurred during package upgrades. Reverting packages to pre-upgrade snapshot."
+
+    - name: Rollback packages to previous versions
+      ansible.builtin.apt:
+        name: "{{ pre_upgrade_packages.stdout_lines }}"
+        state: present
+        allow_downgrade: true
+      ignore_errors: false
+
+    - name: Fail playbook after rollback attempt
+      ansible.builtin.fail:
+        msg: "Patching failed on {{ ansible_hostname }}. Rollback sequence executed."

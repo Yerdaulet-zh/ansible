@@ -5,7 +5,6 @@
   delegate_to: localhost
   become: false
   ignore_errors: true
-  tags: [patching, k8s_maintenance]
 
 - name: Drain the Kubernetes node
   ansible.builtin.shell: |

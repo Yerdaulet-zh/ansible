@@ -1,49 +1,53 @@
 ---
-- block:
-    - name: Capture installed package versions before upgrade (RHEL)
-      ansible.builtin.shell: rpm -qa --queryformat '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n'
-      register: pre_upgrade_packages
-      changed_when: false
+# Install the plugin that provides needs-restarting on supported systems
+- name: Ensure DNF plugins are installed
+  ansible.builtin.dnf:
+    name: dnf-plugins-core
+    state: present
 
-    - name: Ensure yum-utils is present (provides needs-restarting)
-      ansible.builtin.dnf:
-        name: yum-utils
-        state: present
-
-    - name: Update & Upgrade all packages on RedHat family
+# Upgrade packages; report failures without attempting an unsafe rollback
+- name: Upgrade packages on RHEL-family systems
+  block:
+    - name: Update all installed packages
       ansible.builtin.dnf:
         name: "*"
         state: latest
       register: dnf_upgrade_result
 
-    - name: Check if a reboot is required using needs-restarting
-      ansible.builtin.command: needs-restarting -r
-      register: reboot_check
-      failed_when: false
-      changed_when: false
-
-    - name: Reboot the server if needs-restarting flagged it
-      ansible.builtin.reboot:
-        msg: "Rebooting machine by Ansible os_patching role due to kernel/system updates"
-        connect_timeout: 5
-        reboot_timeout: 300
-        pre_reboot_delay: 0
-        post_reboot_delay: 30
-        test_command: uptime
-      when: reboot_check.rc == 1
-
   rescue:
-    - name: Upgrade failed on RHEL! Attempting package version downgrade/rollback...
+    - name: Report DNF upgrade failure
       ansible.builtin.debug:
-        msg: "An error occurred during DNF upgrades on {{ ansible_hostname }}. Reverting packages to pre-upgrade snapshot."
+        msg: >-
+          DNF upgrade failed on {{ inventory_hostname }}.
+          Review the task output and DNF logs.
+          Automatic package rollback was not attempted.
 
-    - name: Rollback packages to previous versions on RHEL
-      ansible.builtin.dnf:
-        name: "{{ pre_upgrade_packages.stdout_lines }}"
-        state: present
-        allow_downgrading: true
-      ignore_errors: false
-
-    - name: Fail playbook after RHEL rollback attempt
+    - name: Fail the patching workflow
       ansible.builtin.fail:
-        msg: "Patching failed on {{ ansible_hostname }}. Rollback sequence executed."
+        msg: >-
+          OS patching failed on {{ inventory_hostname }}.
+          Manual investigation or an approved recovery procedure is required.
+
+# Check whether a reboot is required
+- name: Check whether a reboot is required
+  ansible.builtin.command:
+    argv:
+      - needs-restarting
+      - -r
+  register: reboot_check
+  changed_when: false
+
+  # Exit 0 means no reboot is recommended; 1 means a reboot is recommended.
+  # Other exit codes indicate an error that must not be silently ignored.
+  failed_when: reboot_check.rc not in [0, 1]
+
+# Reboot only when the command recommends it
+- name: Reboot the server when required
+  ansible.builtin.reboot:
+    msg: "Rebooting after OS patching"
+    connect_timeout: 5
+    reboot_timeout: 300
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+    test_command: uptime
+  when: reboot_check.rc == 1

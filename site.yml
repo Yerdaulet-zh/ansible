@@ -13,6 +13,7 @@
   hosts: agents
   become: true
   serial: 1
+  any_errors_fatal: true
   tags: [agent_patching]
   roles:
     - role: os_patching
